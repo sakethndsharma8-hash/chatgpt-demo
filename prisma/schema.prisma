@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum DemoStatus {
+  DRAFT
+  SHARED
+  ARCHIVED
+}
+
+enum ConversationMode {
+  DASHBOARD
+  PUBLIC
+}
+
+enum MessageRole {
+  LEAD
+  AGENT
+}
+
+enum QualificationStage {
+  GOAL
+  SITUATION
+  PAIN
+  BUDGET
+  READY_TO_BOOK
+}
+
+enum BookingStatus {
+  BOOKED
+  CANCELLED
+}
+
+model Demo {
+  id                 String     @id @default(cuid())
+  name               String
+  status             DemoStatus @default(DRAFT)
+  publicSlug         String     @unique
+  publicEnabled      Boolean    @default(false)
+  businessName       String
+  niche              String
+  contactName        String?
+  contactAvatarUrl   String?
+  toneDescription    String
+  serviceInfo        String
+  pricingInfo        String?
+  sampleConversations String?   @db.Text
+  qualificationConfig Json
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  conversations      SimulatedConversation[]
+  bookings           SimulatedBooking[]
+
+  @@index([status])
+  @@index([publicEnabled])
+}
+
+model SimulatedConversation {
+  id                 String              @id @default(cuid())
+  demoId             String
+  mode               ConversationMode
+  leadName           String
+  leadAvatarSeed     String?
+  qualificationStage QualificationStage @default(GOAL)
+  readyToBook        Boolean             @default(false)
+  sessionTokenHash   String?             @unique
+  startedAt          DateTime            @default(now())
+  lastMessageAt      DateTime            @default(now())
+  metadata           Json?
+
+  demo               Demo                @relation(fields: [demoId], references: [id], onDelete: Cascade)
+  messages           SimulatedMessage[]
+  booking            SimulatedBooking?
+
+  @@index([demoId, lastMessageAt])
+  @@index([demoId, qualificationStage])
+  @@index([demoId, mode])
+}
+
+model SimulatedMessage {
+  id             String                @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String                @db.Text
+  sentAt         DateTime              @default(now())
+  agentResponse  Json?
+
+  conversation   SimulatedConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, sentAt])
+}
+
+model SimulatedBooking {
+  id               String                @id @default(cuid())
+  demoId           String
+  conversationId   String                @unique
+  status           BookingStatus         @default(BOOKED)
+  slotStart        DateTime
+  slotEnd          DateTime
+  timezone         String
+  displayLabel     String
+  confirmationCode String                @unique
+  createdAt        DateTime              @default(now())
+
+  demo             Demo                  @relation(fields: [demoId], references: [id], onDelete: Cascade)
+  conversation     SimulatedConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([demoId, createdAt])
+  @@index([demoId, slotStart])
+}
